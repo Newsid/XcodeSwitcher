@@ -1,0 +1,21 @@
+# Build output (app bundle, DMG, intermediates)
+build/
+*.dmg
+
+# Xcode / SwiftPM (if ever opened in Xcode)
+.build/
+.swiftpm/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# macOS
+.DS_Store
+._*
+.AppleDouble
+.LSOverride
+
+# Editors
+.vscode/
+.idea/
+*.swp
