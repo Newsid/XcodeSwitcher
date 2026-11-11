@@ -19,3 +19,6 @@ xcuserdata/
 .vscode/
 .idea/
 *.swp
+
+# Local marketing material (LinkedIn images, raw captures)
+screenshots/
