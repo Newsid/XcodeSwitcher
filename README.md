@@ -20,6 +20,7 @@ No configuration files, no naming conventions to follow.
   isn't a detected Xcode.
 - **Running Xcode check** — offers to quit Xcode before renaming it.
 - **Single admin prompt** — renaming and `xcode-select` run together with administrator privileges.
+- **Adjustable text size** — **View → Zoom In / Zoom Out / Actual Size** (⌘+ / ⌘− / ⌘0) scales the UI from 80% to 200%; the setting is remembered.
 
 ## Requirements
 

@@ -236,25 +236,53 @@ final class Store: ObservableObject {
     }
 }
 
+// MARK: - Zoom
+
+/// Text zoom factor driven by ⌘+ / ⌘- / ⌘0, remembered across launches.
+enum Zoom {
+    static let key = "zoomScale"
+    static let range = 0.8...2.0
+    static let step = 0.1
+
+    static func clamp(_ v: Double) -> Double {
+        min(max((v * 10).rounded() / 10, range.lowerBound), range.upperBound)
+    }
+
+    /// Push buttons keep a fixed bezel height per control size, so step it up with the zoom.
+    static func controlSize(_ scale: Double) -> ControlSize {
+        switch scale {
+        case ..<0.95: return .small
+        case ..<1.25: return .regular
+        default: return .large
+        }
+    }
+
+    /// macOS base point sizes of the text styles used in the UI.
+    static func font(_ base: CGFloat, _ scale: Double, _ weight: Font.Weight = .regular) -> Font {
+        .system(size: base * scale, weight: weight)
+    }
+}
+
 // MARK: - UI
 
 struct ContentView: View {
     @StateObject private var store = Store()
+    @AppStorage(Zoom.key) private var scale = 1.0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12 * scale) {
             Text("Choose the Xcode version to use")
-                .font(.headline)
+                .font(Zoom.font(13, scale, .bold))
 
             if store.installs.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "hammer").font(.largeTitle).foregroundStyle(.secondary)
+                VStack(spacing: 8 * scale) {
+                    Image(systemName: "hammer").font(Zoom.font(26, scale)).foregroundStyle(.secondary)
                     Text("No Xcode found in /Applications").foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(store.installs, selection: $store.selection) { x in
-                    Row(install: x, active: store.isActive(x))
+                    Row(install: x, active: store.isActive(x), scale: scale)
                         .tag(x.id)
                 }
                 .listStyle(.bordered(alternatesRowBackgrounds: true))
@@ -272,18 +300,24 @@ struct ContentView: View {
                 Button {
                     store.reload()
                 } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+                    Label("Refresh", systemImage: "arrow.clockwise").font(Zoom.font(13, scale))
                 }
                 Spacer()
                 if store.busy { ProgressView().controlSize(.small) }
-                Button("Quit") { NSApp.terminate(nil) }
-                Button("Use Selected") { store.switchToSelected() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(store.busy || !store.needsSwitch)
+                Button { NSApp.terminate(nil) } label: {
+                    Text("Quit").font(Zoom.font(13, scale))
+                }
+                Button { store.switchToSelected() } label: {
+                    Text("Use Selected").font(Zoom.font(13, scale))
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(store.busy || !store.needsSwitch)
             }
+            .controlSize(Zoom.controlSize(scale))
         }
-        .padding()
-        .frame(minWidth: 460, minHeight: 300)
+        .font(Zoom.font(13, scale))
+        .padding(16 * scale)
+        .frame(minWidth: 460 * scale, minHeight: 300 * scale)
         .onAppear { store.reload() }
     }
 }
@@ -291,35 +325,37 @@ struct ContentView: View {
 struct Row: View {
     let install: XcodeInstall
     let active: Bool
+    let scale: Double
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 10 * scale) {
             Image(nsImage: NSWorkspace.shared.icon(forFile: install.url.path))
                 .resizable()
-                .frame(width: 32, height: 32)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text("Xcode \(install.version)").font(.body.weight(.semibold))
-                    if install.isBeta { Badge(text: "beta", color: .orange) }
-                    if active { Badge(text: "active", color: .green) }
+                .frame(width: 32 * scale, height: 32 * scale)
+            VStack(alignment: .leading, spacing: 2 * scale) {
+                HStack(spacing: 6 * scale) {
+                    Text("Xcode \(install.version)").font(Zoom.font(13, scale, .semibold))
+                    if install.isBeta { Badge(text: "beta", color: .orange, scale: scale) }
+                    if active { Badge(text: "active", color: .green, scale: scale) }
                 }
                 Text("\(install.build) · \(install.fileName)")
-                    .font(.caption)
+                    .font(Zoom.font(10, scale))
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 2 * scale)
     }
 }
 
 struct Badge: View {
     let text: String
     let color: Color
+    let scale: Double
     var body: some View {
         if #available(macOS 14, *) {
-            ProminenceAwareBadge(text: text, color: color)
+            ProminenceAwareBadge(text: text, color: color, scale: scale)
         } else {
-            BadgeLabel(text: text, foreground: color, background: color.opacity(0.2))
+            BadgeLabel(text: text, foreground: color, background: color.opacity(0.2), scale: scale)
         }
     }
 }
@@ -329,12 +365,13 @@ struct Badge: View {
 private struct ProminenceAwareBadge: View {
     let text: String
     let color: Color
+    let scale: Double
     @Environment(\.backgroundProminence) private var prominence
     var body: some View {
         if prominence == .increased {
-            BadgeLabel(text: text, foreground: .white, background: .white.opacity(0.25))
+            BadgeLabel(text: text, foreground: .white, background: .white.opacity(0.25), scale: scale)
         } else {
-            BadgeLabel(text: text, foreground: color, background: color.opacity(0.2))
+            BadgeLabel(text: text, foreground: color, background: color.opacity(0.2), scale: scale)
         }
     }
 }
@@ -343,11 +380,12 @@ private struct BadgeLabel: View {
     let text: String
     let foreground: Color
     let background: Color
+    let scale: Double
     var body: some View {
         Text(text)
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
+            .font(Zoom.font(10, scale, .semibold))
+            .padding(.horizontal, 6 * scale)
+            .padding(.vertical, 1 * scale)
             .background(background, in: Capsule())
             .foregroundStyle(foreground)
     }
@@ -355,14 +393,43 @@ private struct BadgeLabel: View {
 
 struct XcodeSwitcherApp: App {
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
+    @AppStorage(Zoom.key) private var scale = 1.0
+
     var body: some Scene {
         WindowGroup("Xcode Switcher") { ContentView() }
             .windowResizability(.contentSize)
+            .commands {
+                CommandGroup(after: .toolbar) {
+                    Button("Actual Size") { scale = 1.0 }
+                        .keyboardShortcut("0")
+                        .disabled(scale == 1.0)
+                    Button("Zoom In") { scale = Zoom.clamp(scale + Zoom.step) }
+                        .keyboardShortcut("+")
+                        .disabled(scale >= Zoom.range.upperBound)
+                    Button("Zoom Out") { scale = Zoom.clamp(scale - Zoom.step) }
+                        .keyboardShortcut("-")
+                        .disabled(scale <= Zoom.range.lowerBound)
+                    Divider()
+                }
+            }
     }
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // "+" needs Shift on some layouts (e.g. US), so also accept ⌘= for Zoom In.
+        // Shift is tolerated because "=" itself needs Shift on others (e.g. Italian).
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting(.shift)
+            guard mods == .command, event.charactersIgnoringModifiers == "=" else { return event }
+            let d = UserDefaults.standard
+            let current = d.object(forKey: Zoom.key) as? Double ?? 1.0
+            d.set(Zoom.clamp(current + Zoom.step), forKey: Zoom.key)
+            return nil
+        }
+    }
 }
 
 // MARK: - Entry point
