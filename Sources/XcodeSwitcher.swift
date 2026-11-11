@@ -316,12 +316,40 @@ struct Badge: View {
     let text: String
     let color: Color
     var body: some View {
+        if #available(macOS 14, *) {
+            ProminenceAwareBadge(text: text, color: color)
+        } else {
+            BadgeLabel(text: text, foreground: color, background: color.opacity(0.2))
+        }
+    }
+}
+
+/// Turns white on the blue (emphasized) selection highlight, where the tinted badge would be unreadable.
+@available(macOS 14, *)
+private struct ProminenceAwareBadge: View {
+    let text: String
+    let color: Color
+    @Environment(\.backgroundProminence) private var prominence
+    var body: some View {
+        if prominence == .increased {
+            BadgeLabel(text: text, foreground: .white, background: .white.opacity(0.25))
+        } else {
+            BadgeLabel(text: text, foreground: color, background: color.opacity(0.2))
+        }
+    }
+}
+
+private struct BadgeLabel: View {
+    let text: String
+    let foreground: Color
+    let background: Color
+    var body: some View {
         Text(text)
             .font(.caption2.weight(.semibold))
             .padding(.horizontal, 6)
             .padding(.vertical, 1)
-            .background(color.opacity(0.2), in: Capsule())
-            .foregroundStyle(color)
+            .background(background, in: Capsule())
+            .foregroundStyle(foreground)
     }
 }
 
